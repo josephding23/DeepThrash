@@ -7,10 +7,8 @@ class LSTMetallica(nn.Module):
         super(LSTMetallica, self).__init__()
         self.num_units = num_units
 
-        self.lstm = nn.Sequential()
         self.dropout = nn.Dropout(0.2)
         self.dense = nn.Linear(in_features=num_units, out_features=num_chars)
-        self.softmax = nn.Softmax()
 
         '''
         for layer_idx in range(num_layers):
@@ -21,13 +19,13 @@ class LSTMetallica(nn.Module):
                 self.lstm.add_module(name='LSTM',
                                      module=nn.LSTM(input_size=num_units, hidden_size=num_units))
         '''
-        self.lstm1 = nn.LSTM(input_size=num_units, hidden_size=num_units)
-        self.lstm2 = nn.LSTM(input_size=num_units, hidden_size=num_units)
+        self.lstm1 = nn.LSTM(input_size=num_chars, hidden_size=num_units, num_layers=1, batch_first=True)
+        self.lstm2 = nn.LSTM(input_size=num_units, hidden_size=num_units, num_layers=1, batch_first=True)
 
     def forward(self, in_tensor):
         x = in_tensor
         # print(x.shape)
-        batch_size = x.size(1)
+        batch_size = x.size(0)
         h0 = torch.zeros([1, batch_size, self.num_units]).to(torch.device('cuda'), dtype=torch.float)
         c0 = torch.zeros([1, batch_size, self.num_units]).to(torch.device('cuda'), dtype=torch.float)
 
@@ -35,7 +33,7 @@ class LSTMetallica(nn.Module):
 
         # print(x.shape)
 
-        x, (h0, c0) = self.lstm2(x, (h1, c1))
+        x, _ = self.lstm2(x, (h1, c1))
         # print(x.shape)
 
         x = self.dropout(x)
@@ -44,7 +42,8 @@ class LSTMetallica(nn.Module):
         x = self.dense(x)
         # print(x.shape)
 
-        x = self.softmax(x)
+        # x = self.softmax(x)
+        # print(x.shape)
 
         return x
 

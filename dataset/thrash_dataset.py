@@ -29,18 +29,6 @@ class ThrashDataset(data.Dataset):
         print('nb sequences:', len(sentences))
         print('Vectorization...')
 
-        X = np.zeros((len(sentences), self.num_chars, maxlen), dtype=np.bool)
-        y = np.zeros((len(sentences), self.num_chars), dtype=np.bool)
-
-        print(X.shape, y.shape)
-        for i, sentence in enumerate(sentences):
-            for t, char in enumerate(sentence):
-                X[i, self.char_indices[char], t] = 1
-            y[i, self.char_indices[next_chars[i]]] = 1
-
-        _y = y.reshape((y.shape[0], y.shape[1], 1))
-        self.data = np.concatenate((X, _y), axis=2)
-        '''
         X = np.zeros((len(sentences), maxlen, self.num_chars), dtype=np.bool)
         y = np.zeros((len(sentences), self.num_chars), dtype=np.bool)
 
@@ -52,7 +40,6 @@ class ThrashDataset(data.Dataset):
 
         _y = y.reshape((y.shape[0], 1, y.shape[1]))
         self.data = np.concatenate((X, _y), axis=1)
-        '''
 
     def __len__(self):
         return self.data.shape[0]
@@ -62,6 +49,9 @@ class ThrashDataset(data.Dataset):
 
     def get_total_chars(self):
         return self.num_chars
+
+    def get_text(self):
+        return self.text
 
     def get_data(self):
         return self.data
