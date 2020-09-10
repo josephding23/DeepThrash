@@ -10,6 +10,8 @@ class LSTMetallica(nn.Module):
         self.dropout = nn.Dropout(0.2)
         self.dense = nn.Linear(in_features=num_units, out_features=num_chars)
 
+        self.softmax = nn.Softmax(dim=1)
+
         '''
         for layer_idx in range(num_layers):
             if layer_idx == 0:
@@ -26,8 +28,11 @@ class LSTMetallica(nn.Module):
         x = in_tensor
         # print(x.shape)
         batch_size = x.size(0)
-        h0 = torch.zeros([1, batch_size, self.num_units]).to(torch.device('cuda'), dtype=torch.float)
-        c0 = torch.zeros([1, batch_size, self.num_units]).to(torch.device('cuda'), dtype=torch.float)
+        h0 = torch.randn(1, batch_size, self.num_units).to(torch.device('cuda'), dtype=torch.float)
+        c0 = torch.randn(1, batch_size, self.num_units).to(torch.device('cuda'), dtype=torch.float)
+
+        # h0 = torch.zeros([1, batch_size, self.num_units]).to(torch.device('cuda'), dtype=torch.float)
+        # c0 = torch.zeros([1, batch_size, self.num_units]).to(torch.device('cuda'), dtype=torch.float)
 
         x, (h1, c1) = self.lstm1(x, (h0, c0))
 
@@ -39,10 +44,11 @@ class LSTMetallica(nn.Module):
         x = self.dropout(x)
         # print(x.shape)
 
+        x = x[:, -1, :]
         x = self.dense(x)
         # print(x.shape)
 
-        # x = self.softmax(x)
+        x = self.softmax(x)
         # print(x.shape)
 
         return x

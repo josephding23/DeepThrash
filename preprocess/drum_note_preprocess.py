@@ -30,7 +30,7 @@ class Note:
         self.idx = idx
 
 
-class NoteList():
+class NoteList(object):
     def __init__(self):
         self.notes = []
         self.quantised = False
@@ -76,15 +76,13 @@ class NoteList():
 
         event_text_temp = ['0b' + ''.join(e) for e in event_track]  # encoding to binary
 
-        event_text = []
-        # event_text.append('SONG_BEGIN')
-        # event_text.append('BAR')
+        event_text = ['SONG_BEGIN', 'BAR']
         for bar_idx in range(num_bars):
             event_from = bar_idx * event_per_bar
             event_to = event_from + event_per_bar
             event_text = event_text + event_text_temp[event_from:event_to]
             event_text.append('BAR')
 
-        # event_text.append('SONG_END')
+        event_text.append('SONG_END')
 
         return ' '.join(event_text)
