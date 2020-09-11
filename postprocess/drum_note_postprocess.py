@@ -47,20 +47,22 @@ def conv_text_to_midi(filename):
 
     mid = mido.MidiFile()
     drum_track = mido.MidiTrack()
+    drum_track.resolution = 192
     '''
     pm = pretty_midi.PrettyMIDI()
     drum_track = pretty_midi.Instrument(is_drum=True, program=0)
     '''
 
     PPQ = 220
-    min_ppq = PPQ / (event_per_bar/4)
+    min_ppq = PPQ / (event_per_bar / 4)
     drum_track.resolution = PPQ # ???? too slow. why??
     # track.resolution = 192
     # pm.instruments.append(drum_track)
     mid.tracks.append(drum_track)
 
     velocity = 84
-    duration = min_ppq * 9 / 10
+    # duration = min_ppq * 9 / 10
+    duration = min_ppq
 
     note_list = text_to_notes(encoded_drums, note_list=note_list)
 
@@ -68,8 +70,9 @@ def conv_text_to_midi(filename):
     not_yet_offed = []
     for note_idx, note in enumerate(note_list.notes[:-1]):
         # add onset
-        # tick_here = note.c_tick - max_c_tick
-        tick_here = note.c_tick
+        print(note.c_tick, max_c_tick)
+        tick_here = note.c_tick - max_c_tick
+        # Stick_here = note.c_tick
         pitch_here = note.pitch
         # print(tick_here, pitch_here)
         # pitch_here = pitch_to_midipitch[note.pitch]
@@ -78,7 +81,8 @@ def conv_text_to_midi(filename):
         # 	off = midi.NoteOffEvent(tick=0, pitch=pitch_here)
         # 	track.append(off)
 
-        on = mido.Message('note_on', note=pitch_here, velocity=velocity, time=int(tick_here))
+        # on = mido.Message('note_on', note=pitch_here, velocity=velocity, time=int(tick_here))
+        on = mido.Message('note_on', note=pitch_here, velocity=velocity, time=tick_here, channel=9)
         drum_track.append(on)
         max_c_tick = max(max_c_tick, note.c_tick)
         # add offset for something not cymbal
@@ -91,13 +95,13 @@ def conv_text_to_midi(filename):
         start_tick = tick_here
         for off_idx, (waiting_pitch, waiting_tick) in enumerate(not_yet_offed):
             if off_idx == 0:
-                off = mido.Message('note_off', note=waiting_pitch, time=int(duration))
+                off = mido.Message('note_off', note=waiting_pitch, time=int(duration), channel=9)
                 # print(waiting_pitch, waiting_tick, waiting_tick+duration)
                 # midi_note = pretty_midi.Note(velocity=velocity, pitch=waiting_pitch,
                 #                              start=waiting_tick, end=waiting_tick+duration)
-                max_c_tick = max_c_tick + duration
+                # max_c_tick = int(max_c_tick + duration)
             else:
-                off = mido.Message('note_off', note=waiting_pitch, time=int(duration))
+                off = mido.Message('note_off', note=waiting_pitch, time=0, channel=9)
                 # print(waiting_pitch, waiting_tick, waiting_tick + duration)
                 # midi_note = pretty_midi.Note(velocity=velocity, pitch=waiting_pitch,
                 #                              start=waiting_tick, end=waiting_tick)
@@ -113,13 +117,13 @@ def conv_text_to_midi(filename):
     tick_here = note.c_tick - max_c_tick
     pitch_here = note.pitch
 
-    on = mido.Message('note_on', time=int(tick_here), velocity=velocity, note=pitch_here)
-    off = mido.Message('note_off', time=int(tick_here) + int(duration), note=pitch_here)
+    on = mido.Message('note_on', time=int(tick_here), velocity=velocity, note=pitch_here, channel=9)
+    off = mido.Message('note_off', time=int(tick_here) + int(duration), note=pitch_here, channel=9)
     # midi_note = pretty_midi.Note(velocity=velocity, pitch=pitch_here,
     #                              start=tick_here, end=tick_here + duration)
 
     for off_idx, (waiting_pitch, waiting_tick) in enumerate(not_yet_offed):
-        off = mido.Message('note_off', time=waiting_tick, pitch=waiting_pitch)
+        off = mido.Message('note_off', time=waiting_tick, pitch=waiting_pitch, channel=9)
         # midi_note = pretty_midi.Note(velocity=velocity, pitch=waiting_pitch,
         #                              start=waiting_tick, end=waiting_tick)
 

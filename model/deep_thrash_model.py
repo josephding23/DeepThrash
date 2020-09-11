@@ -8,11 +8,20 @@ import torch.nn as nn
 from torch.optim import lr_scheduler, Adam
 from model.dt_config import Config
 import random
+import traceback
 import sys
+from torch.nn import init
+
+
+def init_weight_(net):
+    for name, param in net.named_parameters():
+        if 'weight' in name:
+            init.normal_(param, mean=0, std=0.02)
 
 
 def sample(a, temperature=1.0):
     # sample an index from a probability array
+    a = np.asarray(a).astype('float64')
     a = np.log(a) / temperature
     a = np.exp(a) / np.sum(np.exp(a))
     # print(a)
@@ -21,7 +30,8 @@ def sample(a, temperature=1.0):
         # print(sum(a))
         return result
     except:
-        print(a, sum(a))
+        print(traceback.format_exc())
+        print(sum(a))
         return None
 
 
@@ -83,17 +93,9 @@ class DeepThrashModel(object):
         return y_hat
 
     def predict_model_single(self, x):
-
-        # print('Starting predictions...')
-        # y_hat = torch.empty(1, 1).to(self.device)
         y_hat = self.network(x)
-        # print(y_hat.shape, self.network(x).shape)
-        # y_hat = torch.cat([y_hat, self.network(x)])
-
         y_hat = torch.flatten(
             y_hat).detach().cpu().numpy()  # y_hat[batchsize:] is to remove first empty 'section'
-        # print('Predictions complete...')
-        # print(y_hat.shape)
         return y_hat
 
     def run(self):
@@ -132,10 +134,11 @@ class DeepThrashModel(object):
         start_index = random.randint(0, len(text) - maxlen - 1)
 
         for (iteration, nb_epoch) in zip(pt_x, nb_epochs):
+            init_weight_(self.network)
+            print(f'\nMaxlen: {maxlen}, num_units: {num_units}, epoch num: {nb_epoch}')
             model_path = '%smodel_after_%d.hdf' % (result_directory, nb_epoch)
             if not os.path.exists(model_path):
                 self.network.train()
-
                 for epoch in range(nb_epoch):
                     loader = DataLoader(dataset, batch_size=128, shuffle=True)
                     for i, data in enumerate(loader):
@@ -158,32 +161,11 @@ class DeepThrashModel(object):
                 torch.save(self.network.state_dict(), model_path)
 
             else:
-                self.network.train()
-
-                for epoch in range(nb_epoch):
-                    loader = DataLoader(dataset, batch_size=128, shuffle=True)
-                    for i, data in enumerate(loader):
-                        X = data[:, :-1, :]
-                        X = X.to(self.device, dtype=torch.float)
-
-                        y = data[:, -1, :]
-                        y = y.to(self.device, dtype=torch.float)
-
-                        Y = self.network(X).squeeze()
-                        self.optimizer.zero_grad()
-                        loss = criterion(Y, y.squeeze())
-                        loss.backward()
-
-                        self.optimizer.step()
-
-                        loss_history.append(loss.item())
-
-                    print(f'Epoch {epoch}, Loss: {loss_history[-1]}')
-                torch.save(self.network.state_dict(), model_path)
-                # self.network.load_state_dict(torch.load(model_path))
+                self.network.load_state_dict(torch.load(model_path))
+                print(f'Model loaded')
 
             self.network.eval()
-            for diversity in [0.9, 1.0, 1.2]:
+            for diversity in [0.5, 0.8, 1.0, 1.25, 1.5]:
                 with open(('%sresult_%s_iter_%02d_diversity_%4.2f.txt' %
                            (result_directory, prefix, iteration, diversity)), 'w') as f_write:
 
@@ -220,9 +202,6 @@ class DeepThrashModel(object):
                             x[0, t, dataset.char_indices[char]] = 1.
 
                         preds = self.predict_model_single(torch.from_numpy(x).to(self.device, dtype=torch.float))
-                        # preds = preds.detach().squeeze().cpu().numpy()
-                        # print(preds)
-                        # print(preds.shape)
                         next_index = sample(preds, diversity)
                         if next_index is None:
                             return
@@ -256,7 +235,7 @@ class DeepThrashModel(object):
 
 if __name__ == '__main__':
     for maxlen in [256]:
-        for num_units in [128, 512]:
+        for num_units in [128, 256, 512]:
             config = Config(False, maxlen=maxlen, num_units=num_units)
             model = DeepThrashModel(config)
             model.run()
