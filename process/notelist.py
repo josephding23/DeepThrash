@@ -59,6 +59,15 @@ class NoteList(object):
 
         self.notes = [note for note in self.notes if note.pitch in allowed_pitch]
 
+    def reorganize_by_tick(self):
+        ordered_note_dict = {}
+        for note in self.notes:
+            if note.c_tick in ordered_note_dict.keys():
+                ordered_note_dict[note.c_tick].append(note.pitch)
+            else:
+                ordered_note_dict[note.c_tick] = [note.pitch]
+        return ordered_note_dict
+
     def return_as_text(self):
         length = self.max_idx + 1  # of events in the track.
         event_track = []
