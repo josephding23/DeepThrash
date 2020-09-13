@@ -17,12 +17,10 @@ class Note:
 
     def quantise(self, min_ppq):
         self.on_tick = ((self.on_tick + min_ppq / 2) / min_ppq) * min_ppq
-        self.quantised = True
 
     def simplify(self, drum_conversion_dict):
         if self.pitch in drum_conversion_dict.keys():
             self.pitch = drum_conversion_dict[self.pitch]
-        self.simplified = True
 
     def offed(self):
         return not self.off_tick == -1
@@ -31,6 +29,7 @@ class Note:
 class NoteList:
     def __init__(self):
         self.notes = []
+        self.simplified_notes = []
         self.quantised = False
         self.simplified = False
 
@@ -110,10 +109,38 @@ class NoteList:
         on_ticks = list(ordered_notes.keys())
         return on_ticks[-1]
 
-    def return_as_matrix(self):
+    def save_to_midi(self, path):
+        mid = mido.MidiFile()
+        drum_track = mido.MidiTrack()
+
+        min_ppq = self.get_min_ppq()
+        ordered_notes = self.reorganize_by_on_tick()
+        current_tick = 0
+
+        for on_tick, pitches in ordered_notes.items():
+            tick_margin = on_tick - current_tick
+            current_tick = max(current_tick, on_tick)
+
+            note_on = mido.Message('note_on', time=tick_margin, note=pitches[0], channel=9)
+            drum_track.append(note_on)
+            for pitch in pitches[1:]:
+                note_on = mido.Message('note_on', time=0, note=pitch, channel=9)
+                drum_track.append(note_on)
+
+            tick_margin = min_ppq
+            current_tick = current_tick + min_ppq
+            note_off = mido.Message('note_off', time=tick_margin, note=pitches[0], channel=9)
+            drum_track.append(note_off)
+            for pitch in pitches[1:]:
+                note_off = mido.Message('note_off', time=0, note=pitch, channel=9)
+                drum_track.append(note_off)
+
+        mid.tracks.append(drum_track)
+        mid.save(path)
+
+    def get_matrix(self):
         min_ppq = self.get_min_ppq()
         max_idx = int(self.get_last_on_tick() / self.get_min_ppq()) + 1
-        print(max_idx)
         self.simplify_drums()
         drum_matrix = np.zeros((max_idx, 9))
 
@@ -126,6 +153,20 @@ class NoteList:
                 drum_matrix[x, y] = 1.0
 
         return drum_matrix
+
+    def get_nonzeros(self):
+        min_ppq = self.get_min_ppq()
+        self.simplify_drums()
+        nonzeros = []
+        ordered_notes = self.reorganize_by_on_tick()
+        for on_tick, pitches in ordered_notes.items():
+            x = int(on_tick / min_ppq)
+            for pitch in pitches:
+                y = self.pitch_to_y_dict[pitch]
+
+                nonzeros.append([x, y])
+
+        return np.array(nonzeros)
 
 
 def generate_notelist_from_midi_test():
@@ -140,12 +181,15 @@ def generate_notelist_from_midi_test():
                 if msg.type == 'note_on':
                     pitch, tick, velocity = msg.note, msg.time, msg.velocity
                     if pitch == 0:
-                        current_tick += tick
+                        pass
+                        # current_tick += tick
                     else:
                         current_tick += tick
                         on_notes.append(Note(pitch=pitch, on_tick=current_tick, velocity=velocity))
                 else:  # note_off
                     pitch, tick, velocity = msg.note, msg.time, msg.velocity
+                    if pitch == 0:
+                        pass
                     current_tick += tick
                     for on_note in on_notes:
                         assert isinstance(on_note, Note)
@@ -164,4 +208,6 @@ if __name__ == '__main__':
     # for note in note_list.notes:
     #     print(note.pitch, note.on_tick, note.off_tick)
     # print(note_list.min_ppq, note_list.last_on_tick)
-    print(note_list.return_as_matrix())
+    # print(note_list.return_as_matrix())
+    # note_list.save_to_midi('../static/midi/test/save_test.mid')
+    print(note_list.get_nonzeros())
