@@ -1,8 +1,9 @@
 
 class Config(object):
-    def __init__(self, is_charactor, maxlen, num_units=None, model_prefix=''):
+    def __init__(self, is_charactor, maxlen, start_over, num_units=None, model_prefix=''):
         self.character_mode = is_charactor
         self.maxlen = maxlen
+        self.start_over = start_over
         self.num_units = num_units
         self.model_prefix = model_prefix
 

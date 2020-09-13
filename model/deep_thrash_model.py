@@ -67,7 +67,7 @@ class DeepThrashModel(object):
         else:
             self.num_char_pred = 17 * 30
 
-        self.num_layers = 2
+        self.num_layers = 3
 
         if self.character_mode:
             self.prefix = 'char'
@@ -161,8 +161,31 @@ class DeepThrashModel(object):
                 torch.save(self.network.state_dict(), model_path)
 
             else:
-                self.network.load_state_dict(torch.load(model_path))
-                print(f'Model loaded')
+                if not self.opt.start_over:
+                    self.network.load_state_dict(torch.load(model_path))
+                    print(f'Model loaded')
+                else:
+                    self.network.train()
+                    for epoch in range(nb_epoch):
+                        loader = DataLoader(dataset, batch_size=128, shuffle=True)
+                        for i, data in enumerate(loader):
+                            X = data[:, :-1, :]
+                            X = X.to(self.device, dtype=torch.float)
+
+                            y = data[:, -1, :]
+                            y = y.to(self.device, dtype=torch.float)
+
+                            Y = self.network(X).squeeze()
+                            self.optimizer.zero_grad()
+                            loss = criterion(Y, y.squeeze())
+                            loss.backward()
+
+                            self.optimizer.step()
+
+                            loss_history.append(loss.item())
+
+                        print(f'Epoch {epoch}, Loss: {loss_history[-1]}')
+                    torch.save(self.network.state_dict(), model_path)
 
             self.network.eval()
             for diversity in [0.5, 0.8, 1.0, 1.25, 1.5]:
@@ -234,8 +257,9 @@ class DeepThrashModel(object):
 
 
 if __name__ == '__main__':
+    start_over = False
     for maxlen in [256]:
         for num_units in [128, 256, 512]:
-            config = Config(False, maxlen=maxlen, num_units=num_units)
+            config = Config(False, maxlen=maxlen, num_units=num_units, start_over=start_over)
             model = DeepThrashModel(config)
             model.run()

@@ -56,7 +56,7 @@ def conv_text_to_midi(path):
     drum_track = mido.MidiTrack()
     drum_track.resolution = 192
 
-    PPQ = 220
+    PPQ = 480
     min_ppq = PPQ / (event_per_bar / 4)
     drum_track.resolution = PPQ # ???? too slow. why??
     # track.resolution = 192
