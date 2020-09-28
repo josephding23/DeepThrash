@@ -1,5 +1,6 @@
 import mido
 import numpy as np
+from utils.plotting import plot_data
 
 
 class Note:
@@ -40,6 +41,8 @@ class NoteList:
         '''
 
         # ignore: 39 Hand Clap, 54 Tambourine, 56 Cowbell, 58 Vibraslap, 60-81
+        self.ignore_pitches = [39, 54, 56, 58]
+
         self.drum_conversion = {
             35: 36,  # Acoustic Bass Drum (35) -> Bass Drum (36)
             37: 38, 40: 38,  # Side Stick (37), Electric Snare (40) -> Acoustic Snare (38)
@@ -48,7 +51,7 @@ class NoteList:
             50: 48,  # High Tom (50) -> Hi-mid Tom (48)
             44: 42,  # Pedal Hi-Hat (44) -> Closed Hi-Hat (42)
             57: 49, 52: 49,  # Crash 2 (57), China Cymbal (52) -> Crash 1 (49)
-            59: 51, 53: 51, 55: 51,  # Ride 2 (59), Ride Bell (53), Splash (55) -> Ride 1 (51)
+            59: 51, 53: 51, 55: 51  # Ride 2 (59), Ride Bell (53), Splash (55) -> Ride 1 (51)
         }
 
         self.allowed_pitch = [36, 38, 42, 46, 41, 45, 48, 51, 49]  # Open Hihat (46)
@@ -67,8 +70,6 @@ class NoteList:
 
     def add_note(self, _note):
         self.notes.append(_note)
-        if _note.off_tick - _note.on_tick == 60:
-            print(_note.off_tick, _note.on_tick)
 
     def quantise(self):
         if not self.quantised:
@@ -99,10 +100,17 @@ class NoteList:
         min_ppq = 9999
         ordered_notes = self.reorganize_by_on_tick()
         on_ticks = list(ordered_notes.keys())
+        margin_dict = {}
         for i, on_tick in enumerate(on_ticks[:-1]):
             next_on_tick = on_ticks[i+1]
-            min_ppq = min(next_on_tick - on_tick, min_ppq)
-        return min_ppq
+            margin = next_on_tick - on_tick
+            if margin > 0:
+                if margin in margin_dict:
+                    margin_dict[margin] += 1
+                else:
+                    margin_dict[margin] = 1
+                min_ppq = min(margin, min_ppq)
+        return min_ppq, margin_dict[min_ppq]
 
     def get_last_on_tick(self):
         ordered_notes = self.reorganize_by_on_tick()
@@ -138,22 +146,6 @@ class NoteList:
         mid.tracks.append(drum_track)
         mid.save(path)
 
-    def get_matrix(self):
-        min_ppq = self.get_min_ppq()
-        max_idx = int(self.get_last_on_tick() / self.get_min_ppq()) + 1
-        self.simplify_drums()
-        drum_matrix = np.zeros((max_idx, 9))
-
-        ordered_notes = self.reorganize_by_on_tick()
-        for on_tick, pitches in ordered_notes.items():
-            x = int(on_tick / min_ppq)
-            for pitch in pitches:
-                y = self.pitch_to_y_dict[pitch]
-
-                drum_matrix[x, y] = 1.0
-
-        return drum_matrix
-
     def get_nonzeros(self):
         min_ppq = self.get_min_ppq()
         self.simplify_drums()
@@ -169,15 +161,49 @@ class NoteList:
         return np.array(nonzeros)
 
 
-def generate_notelist_from_midi_test():
-    path = "E:/thrash_drums/Metallica/Kill 'Em All/01 - Hit the Lights/Hit The Lights.mid"
+def get_measure_length_and_matrix_nonzeros_from_midi(path):
     mid = mido.MidiFile(path)
+    notelist = generate_notelist_from_midi(path)
+
+    ppq = mid.ticks_per_beat  # fourth_note length
+    assert ppq % 48 == 0
+
+    min_ppq = ppq // 48  # 1/192 note
+    ticks_per_measure = ppq * 4
+
+    notes_num_per_measure = 192
+    bars_num = int(notelist.get_last_on_tick() / ticks_per_measure) + 1
+    notelist.simplify_drums()
+    # drum_matrix = np.zeros((bars_num, notes_num_per_measure, 9))
+    nonzeros = []
+
+    ordered_notes = notelist.reorganize_by_on_tick()
+    for on_tick, pitches in ordered_notes.items():
+        if not on_tick % min_ppq == 0:
+            pass
+        tick_index = on_tick // min_ppq
+
+        measure_index = tick_index // notes_num_per_measure
+        x = tick_index % notes_num_per_measure
+
+        for pitch in pitches:
+            if pitch not in notelist.ignore_pitches:
+                y = notelist.pitch_to_y_dict[pitch]
+                nonzeros.append([measure_index, x, y])
+
+    return bars_num, nonzeros
+
+
+def generate_notelist_from_midi(path):
+    mid = mido.MidiFile(path)
+    ppq = mid.ticks_per_beat  # 4th note length
     notelist = NoteList()
     on_notes = []
     current_tick = 0
     for i, track in enumerate(mid.tracks):
         for msg in track:
-            if not msg.is_meta and msg.channel == 9 and msg.type in ['note_on', 'note_off']:
+            if not msg.is_meta and msg.type in ['note_on', 'note_off']:
+                # print(msg)
                 if msg.type == 'note_on':
                     pitch, tick, velocity = msg.note, msg.time, msg.velocity
                     if pitch == 0:
@@ -185,6 +211,7 @@ def generate_notelist_from_midi_test():
                         # current_tick += tick
                     else:
                         current_tick += tick
+                        # print(pitch, current_tick)
                         on_notes.append(Note(pitch=pitch, on_tick=current_tick, velocity=velocity))
                 else:  # note_off
                     pitch, tick, velocity = msg.note, msg.time, msg.velocity
@@ -198,16 +225,26 @@ def generate_notelist_from_midi_test():
 
                             on_note.set_off_tick(current_tick)
                             notelist.add_note(on_note)
-    print(len(on_notes))
+            else:
+                pass
+                # current_tick += msg.time
     return notelist
 
 
-if __name__ == '__main__':
-    note_list = generate_notelist_from_midi_test()
+def get_metre_list(path):
+    mid = mido.MidiFile(path)
+    for track in mid.tracks:
+        for msg in track:
+            if msg.is_meta and msg.type == 'time_signature':
+                print(msg)
 
-    # for note in note_list.notes:
-    #     print(note.pitch, note.on_tick, note.off_tick)
-    # print(note_list.min_ppq, note_list.last_on_tick)
-    # print(note_list.return_as_matrix())
-    # note_list.save_to_midi('../static/midi/test/save_test.mid')
-    print(note_list.get_nonzeros())
+
+def test_get_matrix():
+    path = "E:/thrash_drums/Metallica/Master of Puppets/02 - Master of Puppets/drums/1.mid"
+    matrix = get_matrix_from_midi(path)
+    plot_data(matrix[:1, :, :])
+    print(matrix.shape)
+
+
+if __name__ == '__main__':
+    test_get_matrix()
